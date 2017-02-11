@@ -1,9 +1,9 @@
 #! /bin/bash
 
 
-test() {
+testfile() {
     BIN=$1
-    TESTS=tests.txt
+    TESTS=$2
     NUMBER_OF_LINES=`wc -l ${TESTS} | cut -d ' ' -f 1-1`
 
     for line in `seq 2 2 ${NUMBER_OF_LINES}`; do
@@ -16,9 +16,18 @@ test() {
         else
             echo "";
             echo -n "Expected ${EXPRESSION} to equal ${RESULT} got ${ACTUAL_RESULT}";
+            exit 0;
         fi
     done
 }
 
+test_full() {
+    BIN=$1
+    for file in `find tests -type f`; do
+        echo $file;
+        testfile $BIN $file;
+        echo "";
+    done
+}
 
-time test $1
+time test_full $1

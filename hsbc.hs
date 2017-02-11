@@ -62,10 +62,11 @@ toRPN = reverse . go [] []
         go stack result (Number i:xs) = go stack (Number i:result) xs
         go stack result (LeftBracket:xs) = go (LeftBracket:stack) result xs
         go stack result (RightBracket:xs) =
+            -- TODO: Handle cases where multiple brackets are around
+            -- a number: ((42))
             let (operators, newStack) = span (/= LeftBracket) stack
                 newResult  = reverse operators ++ result
             in case newStack of
-                   (LeftBracket:BinOp op:rest) -> go rest (BinOp op: newResult) xs
                    (LeftBracket:rest) -> go rest newResult xs
                    _ -> [] -- Error
 
@@ -84,7 +85,7 @@ eval = go []
                     Add -> a + b
                     Sub -> a - b
                     Mult -> a * b
-                    Div -> div a b
+                    Div -> quot a b
             in go (result:stack) xs
         go _ _ = Nothing
 
