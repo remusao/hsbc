@@ -1,10 +1,6 @@
 module Main where
 
 
-import Data.Char (isDigit)
-import Data.Maybe (fromJust)
-
-
 data Operator =
       Add
     | Sub
@@ -19,6 +15,22 @@ data Token =
     | LeftBracket
     | RightBracket
     deriving (Show, Eq)
+
+
+tokenize :: String -> [Token]
+tokenize []       = []
+tokenize ('+':xs) = BinOp Add    : tokenize xs
+tokenize ('-':xs) = BinOp Sub    : tokenize xs
+tokenize ('*':xs) = BinOp Mult   : tokenize xs
+tokenize ('/':xs) = BinOp Div    : tokenize xs
+tokenize ('(':xs) = LeftBracket  : tokenize xs
+tokenize (')':xs) = RightBracket : tokenize xs
+tokenize expr@(x:xs)
+    | isDigit x =
+        let (digits, rest) = span isDigit expr
+        in Number (read digits) : tokenize rest
+    | otherwise = tokenize xs
+    where isDigit n = n `elem` "0123456789"
 
 
 isOp :: Token -> Bool
@@ -39,33 +51,21 @@ hasLowerPrecedence (BinOp op1) (BinOp op2)
 hasLowerPrecedence _ _ = False
 
 
-tokenize :: String -> [Token]
-tokenize []       = []
-tokenize ('+':xs) = BinOp Add    : tokenize xs
-tokenize ('-':xs) = BinOp Sub    : tokenize xs
-tokenize ('*':xs) = BinOp Mult   : tokenize xs
-tokenize ('/':xs) = BinOp Div    : tokenize xs
-tokenize ('(':xs) = LeftBracket  : tokenize xs
-tokenize (')':xs) = RightBracket : tokenize xs
-tokenize expr@(x:xs)
-    | isDigit x =
-        let (digits, rest) = span isDigit expr
-        in Number (read digits) : tokenize rest
-    | otherwise = tokenize xs
-
-
 -- Shunting-Yard algorithm
-toRPN :: [Token] -> [Token]
-toRPN = reverse . go [] []
+eval :: [Token] -> Integer
+eval tokens = case go [] [] tokens of
+           [n] -> n
+           _ -> -1
     where
+        go :: [Token] -> [Integer] -> [Token] -> [Integer]
         -- When there is no more token available, then pop remaining
         -- operators from the stack. If there is a bracket remaining,
         -- this should be a syntax error.
         go stack result [] =
             let (operators, rest) = span isOp stack
-            in reverse operators ++ result
+            in partialRPNEval operators result
         -- Handle number, which are pushed to the result queue directly.
-        go stack result (Number i:xs) = go stack (Number i:result) xs
+        go stack result (Number i:xs) = go stack (i:result) xs
         -- Opening bracket, pushed on the stack.
         go stack result (LeftBracket:xs) = go (LeftBracket:stack) result xs
         -- Closing bracket, pop operators from the stack until we meet the
@@ -73,7 +73,7 @@ toRPN = reverse . go [] []
         -- *without* pushing it into the queue.
         go stack result (RightBracket:xs) =
             let (operators, newStack) = span (/= LeftBracket) stack
-                newResult  = reverse operators ++ result
+                newResult  = partialRPNEval operators result
             in case newStack of
                    (LeftBracket:rest) -> go rest newResult xs
                    _ -> [] -- Error
@@ -82,23 +82,21 @@ toRPN = reverse . go [] []
         -- resulting queue.
         go stack result (op1@(BinOp _):xs) =
             let (operators, newStack) = span (hasLowerPrecedence op1) stack
-            in go (op1:newStack) (reverse operators ++ result) xs
+                newResult = partialRPNEval operators result
+            in go (op1:newStack) newResult xs
 
-
-evalRPN :: [Token] -> Maybe Integer
-evalRPN = go []
-    where
-        go [result] [] = Just result
-        go stack (Number n:xs) = go (n:stack) xs
-        go (b:a:stack) (BinOp op:xs) =
-            let result = case op of
-                    Add -> a + b
-                    Sub -> a - b
-                    Mult -> a * b
-                    Div -> quot a b
-            in go (result:stack) xs
-        go _ _ = Nothing
+        partialRPNEval :: [Token] -> [Integer] -> [Integer]
+        partialRPNEval operators result = go result operators
+            where
+                go result [] = result
+                go (b:a:stack) (BinOp op:xs) =
+                    let result = case op of
+                            Add -> a + b
+                            Sub -> a - b
+                            Mult -> a * b
+                            Div -> quot a b
+                    in go (result:stack) xs
 
 
 main :: IO ()
-main = interact (show . fromJust . evalRPN . toRPN . tokenize)
+main = interact (show . eval . tokenize)
